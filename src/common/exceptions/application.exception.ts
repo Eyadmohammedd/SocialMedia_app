@@ -20,5 +20,5 @@ class B extends A {
   }
 }
 
-const b = new B("111");
+const b = new B(" ");
 console.log(b);

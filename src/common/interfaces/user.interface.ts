@@ -1,16 +1,16 @@
-import { Types } from "mongoose";
+import { Types, Document } from "mongoose";
 import { GenderEnum, ProviderEnum, RoleEnum } from "../Enums";
 
-export interface IUser {
-  _id: Types.ObjectId; // 🔥 مهم جدًا
+export interface IUser extends Document {
+  _id: Types.ObjectId;
 
   firstName: string;
   lastName: string;
   username?: string;
 
   email: string;
-  password?: string; // خليها optional عشان google
-
+  password?: string;
+  slug: string;
   phone?: string;
   profilePicture?: string;
   coverPicture?: string[];
@@ -19,12 +19,13 @@ export interface IUser {
   role: RoleEnum;
   provider: ProviderEnum;
 
-  googleId?: string; 
+  googleId?: string;
 
-  isConfirmed?: boolean; 
-  ConfirmEmail?: Date;
+  isConfirmed?: boolean;
+  confirmEmailAt?: Date;
+  deletedAt?: Date | null;
 
-  ChangeCredentialstime?: Date;
+  credentialsChangedAt?: Date;
   DOB?: Date;
 
   createdAt?: Date;

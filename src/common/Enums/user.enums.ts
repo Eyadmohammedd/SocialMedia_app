@@ -10,3 +10,7 @@ export enum ProviderEnum {
     SYSTEM = 'SYSTEM',
     GOOGLE = 'GOOGLE'
 }
+export enum logoutEnum {
+  ONLY,
+  ALL
+}

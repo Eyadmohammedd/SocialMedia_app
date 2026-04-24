@@ -1,13 +1,19 @@
-import { type NextFunction, type Request, type Response, Router } from "express";
+import {
+  type NextFunction,
+  type Request,
+  type Response,
+  Router,
+} from "express";
 import { successResponse } from "../../common/response";
 import authService from "./auth.service";
 import { ILoginResponse } from "./auth.entity";
 import {
   signupValidation,
   confirmEmailValidation,
-  reSendConfirmEmailValidation
+  reSendConfirmEmailValidation,
 } from "./auth.validation";
 import { BadRequestException } from "../../common/exceptions";
+import { authentication } from "../../middleware";
 
 /* ================= VALIDATION ================= */
 
@@ -15,15 +21,14 @@ const validationMiddleware =
   (schema: any) =>
   (req: Request, res: Response, next: NextFunction): void => {
     try {
-      schema.body.parse(req.body);
+      const parsed = schema.body.parse(req.body);
+      req.body = parsed;
       next();
     } catch (error: any) {
       next(
         new BadRequestException(
-          `Validation failed: ${
-            error.errors?.[0]?.message || "Invalid input"
-          }`
-        )
+          `Validation failed: ${error.errors?.[0]?.message || "Invalid input"}`,
+        ),
       );
     }
   };
@@ -32,19 +37,22 @@ const router = Router();
 
 /* ================= LOGIN ================= */
 
-router.post("/login", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const data = await authService.login(req.body);
+router.post(
+  "/login",
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await authService.login(req.body);
 
-    successResponse<ILoginResponse>({
-      res,
-      message: "Login successful",
-      data,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+      successResponse<ILoginResponse>({
+        res,
+        message: "Login successful",
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 /* ================= SIGNUP ================= */
 
@@ -64,7 +72,7 @@ router.post(
     } catch (error) {
       next(error);
     }
-  }
+  },
 );
 
 /* ================= CONFIRM EMAIL ================= */
@@ -83,7 +91,7 @@ router.patch(
     } catch (error) {
       next(error);
     }
-  }
+  },
 );
 
 /* ================= RESEND OTP ================= */
@@ -102,7 +110,29 @@ router.patch(
     } catch (error) {
       next(error);
     }
-  }
+  },
+);
+
+/* ================= LOGOUT ================= */
+
+router.post(
+  "/logout",
+  authentication(),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const user = (req as any).user;
+      const accessToken = req.headers.authorization?.split(" ")[1] || "";
+
+      const result = await authService.logout(user.sub, accessToken);
+
+      successResponse({
+        res,
+        message: result.message,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
 );
 
 export default router;

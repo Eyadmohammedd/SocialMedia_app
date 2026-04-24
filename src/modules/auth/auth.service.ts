@@ -12,8 +12,15 @@ import {
 } from "../../common/utils/security/hash.security";
 import { generateEncryption } from "../../common/utils/security/encryption.security";
 import { UserRepository } from "../../DB/repository";
-import { redisService, RedisService } from "../../common/services/redis.service";
-import { tokenService, TokenService, TokenPair } from "../../common/services/token.service";
+import {
+  redisService,
+  RedisService,
+} from "../../common/services/redis.service";
+import {
+  tokenService,
+  TokenService,
+  TokenPair,
+} from "../../common/services/token.service";
 import { EmailEnum } from "../../common/Enums";
 
 /* ================= TYPES ================= */
@@ -36,14 +43,21 @@ export class AuthenticationService {
   }
 
   /* ================= LOGIN ================= */
-
   public async login(data: LoginDto): Promise<AuthTokenResponse> {
     const { email, password } = data;
 
-    // 1. Find user with password selected
     const user = await this.userRepository.findOne({
       filter: { email },
-      projection: { password: 1, email: 1, role: 1, isConfirmed: 1, provider: 1 },
+      projection: {
+        password: 1,
+        email: 1,
+        role: 1,
+        isConfirmed: 1,
+        provider: 1,
+        username: 1, // ✅ مهم
+        firstName: 1, // ✅ مهم
+        lastName: 1, // ✅ مهم
+      },
       options: { lean: false },
     });
 
@@ -51,14 +65,12 @@ export class AuthenticationService {
       throw new UnauthorizedException("Invalid credentials");
     }
 
-    // 2. Google-only users have no password
     if (!user.password) {
       throw new UnauthorizedException(
-        "This account uses Google login. Please sign in with Google."
+        "This account uses Google login. Please sign in with Google.",
       );
     }
 
-    // 3. Verify password
     const isMatch = await compareHash({
       plaintext: password,
       hash: user.password,
@@ -68,29 +80,28 @@ export class AuthenticationService {
       throw new UnauthorizedException("Invalid credentials");
     }
 
-    // 4. Must confirm email first
     if (!user.isConfirmed) {
       throw new UnauthorizedException(
-        "Please confirm your email before logging in"
+        "Please confirm your email before logging in",
       );
     }
 
-    // 5. Generate tokens
     const tokenPair = this.tokens.generateTokens({
       sub: user._id.toString(),
       email: user.email,
       role: user.role,
     });
 
-    // 6. Store refresh token in Redis (rotation — one active per user)
-    await this.tokens.storeRefreshToken(user._id.toString(), tokenPair.refreshToken);
+    await this.tokens.storeRefreshToken(
+      user._id.toString(),
+      tokenPair.refreshToken,
+    );
 
     return {
       ...tokenPair,
       user: this.sanitizeUser(user),
     };
   }
-
   /* ================= SIGNUP ================= */
 
   public async signup(data: SignupDto): Promise<IUser> {
@@ -146,7 +157,7 @@ export class AuthenticationService {
     // 3. Cleanup Redis keys
     await this.redis.deleteKey(key);
     await this.redis.deleteKey(
-      this.redis.otpMaxRequestKey({ email, type: EmailEnum.CONFIRM_EMAIL })
+      this.redis.otpMaxRequestKey({ email, type: EmailEnum.CONFIRM_EMAIL }),
     );
 
     // 4. Mark user as confirmed
@@ -177,7 +188,10 @@ export class AuthenticationService {
 
   /* ================= LOGOUT ================= */
 
-  public async logout(userId: string, accessToken: string): Promise<{ message: string }> {
+  public async logout(
+    userId: string,
+    accessToken: string,
+  ): Promise<{ message: string }> {
     // 1. Revoke refresh token (Redis delete)
     await this.tokens.revokeRefreshToken(userId);
 
@@ -206,16 +220,14 @@ export class AuthenticationService {
     // 2. Check it matches what we stored (rotation guard)
     const isValid = await this.tokens.validateStoredRefreshToken(
       payload.sub,
-      incomingRefreshToken
+      incomingRefreshToken,
     );
 
-    if (!isValid) {
-      // Possible token reuse — revoke everything
-      await this.tokens.revokeRefreshToken(payload.sub);
-      throw new UnauthorizedException(
-        "Refresh token reuse detected. Please log in again."
-      );
-    }
+    // Possible token reuse — revoke everything
+    await this.tokens.revokeRefreshToken(payload.sub);
+    throw new UnauthorizedException(
+      "Refresh token reuse detected. Please log in again.",
+    );
 
     // 3. Issue new pair + rotate
     const newPair = this.tokens.generateTokens({
@@ -250,7 +262,7 @@ export class AuthenticationService {
         data: {
           ...googleUser,
           provider: "google",
-          isConfirmed: true,          // email is verified by Google
+          isConfirmed: true, // email is verified by Google
           ConfirmEmail: new Date(),
           role: "user",
         },
@@ -270,7 +282,10 @@ export class AuthenticationService {
       role: user.role,
     });
 
-    await this.tokens.storeRefreshToken(user._id.toString(), tokenPair.refreshToken);
+    await this.tokens.storeRefreshToken(
+      user._id.toString(),
+      tokenPair.refreshToken,
+    );
 
     return { ...tokenPair, user: this.sanitizeUser(user) };
   }
@@ -313,7 +328,7 @@ export class AuthenticationService {
 
   public async deleteUsers(
     filter: Partial<IUser> | Record<string, unknown>,
-    options?: any
+    options?: any,
   ): Promise<DeleteResult> {
     return this.userRepository.deleteMany({ filter, options });
   }
